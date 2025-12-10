@@ -2,11 +2,17 @@ from shiny import ui, render, App
 import seaborn as sns
 import pandas as pd
 import statsmodels.formula.api as smf
+from shiny import reactive 
 
 df = pd.read_csv('holistic_health_lifestyle_dataset.csv')
 
 f = 'Overall_Health_Score ~ Sleep_Hours + Alcohol + Stress_Level + Mindfulness + Hydration + Physical_Activity + Smoking '
 model = smf.ols(formula=f, data=df).fit()
+
+band_ranges = (
+    df.groupby("Health_Status")["Overall_Health_Score"].agg(["min", "max"])
+)
+
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
@@ -39,19 +45,31 @@ app_ui = ui.page_sidebar(
         "How many cigarettes do you smoke a day?",
         min = 0, max= 30, value = 1),
     ),
-    ui.h1("Your Health Score"),
+    ui.h1("What is Your Health Score"),
     ui.layout_columns(
         ui.card(
             ui.card_header("Distribution of Health Scores"),
-            ui.output_plot("plot")
-        )),
-    ui.output_text_verbatim("value"),
+            ui.output_plot("plot"),
+            ui.card_header("Your Health Score"),
+            ui.output_text_verbatim("value"),
+        ),
     
-    ui.input_slider("n", "Number of bins", 1, 100, 20), 
-)
+    ui.input_slider("n", "Number of bins", 2, 100, 20), 
+))
 
 
 def server(input, output, session):
+
+    user_score = reactive.Value(None)
+
+    def categorize_score(score):
+    row = band_ranges[(band_ranges["min"] <= score) & (band_ranges["max"] >= score)]
+    if len(row) == 1:
+        return row.index[0]
+    else:
+        return "Unknown"
+
+    
     @output
     @render.plot(alt="Where does your health score fall on others health scores?")  
     def plot():  
@@ -69,14 +87,30 @@ def server(input, output, session):
         'Smoking': input.Smoking(),
         'Stress_Level': input.Stress_Level()}])
         user_hs = model.predict(out_of_sample_data)
+        user_score.set(user_hs[0])
         ax.axvline(user_hs[0], color= 'red')
         return ax  
-
+    
     @output
     @render.text
     def value():
-        return f"Sleep: {input.Sleep_Hours()}, Mindfulness: {input.Mindfulness()}, Hydration: {input.Hydration()}, Stress: {input.Stress_Level()}, Exercise: {input.Physical_Activity()}, Alcohol: {input.Alcohol()}, Smoking: {input.Smoking()}"
+        score = user_score.get()
 
+        if score is None:
+            score_text = "Score not calculated yet."
+        else:
+            score_text = f"Predicted Health Score: {score:.2f}"
+
+        return (
+            f"Sleep: {input.Sleep_Hours()}, "
+            f"Mindfulness: {input.Mindfulness()}, "
+            f"Hydration: {input.Hydration()}, "
+            f"Stress: {input.Stress_Level()}, "
+            f"Exercise: {input.Physical_Activity()}, "
+            f"Alcohol: {input.Alcohol()}, "
+            f"Smoking: {input.Smoking()}\n\n"
+            f"{score_text}"
+        )
  
 
 #App
