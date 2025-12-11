@@ -52,6 +52,7 @@ app_ui = ui.page_sidebar(
             ui.output_plot("plot"),
             ui.card_header("Your Health Score"),
             ui.output_text_verbatim("value"),
+            ui.output_text_verbatim("category"),
         ),
     
     ui.input_slider("n", "Number of bins", 2, 100, 20), 
@@ -61,13 +62,24 @@ app_ui = ui.page_sidebar(
 def server(input, output, session):
 
     user_score = reactive.Value(None)
+    user_category = reactive.Value(None)
+
 
     def categorize_score(score):
-    row = band_ranges[(band_ranges["min"] <= score) & (band_ranges["max"] >= score)]
-    if len(row) == 1:
-        return row.index[0]
-    else:
-        return "Unknown"
+        row = band_ranges[(band_ranges["min"] <= score) & (band_ranges["max"] >= score)]
+        if len(row) == 1:
+            return row.index[0]
+        else:
+            return "Unknown"
+        
+    def category_emoji(cat):
+        if cat == "Good":
+            return "🟢"
+        elif cat == "Average":
+            return "🟡"
+        elif cat == "Poor":
+            return "🔴"
+        return "❓"
 
     
     @output
@@ -86,9 +98,12 @@ def server(input, output, session):
         'Physical_Activity' : input.Physical_Activity(),
         'Smoking': input.Smoking(),
         'Stress_Level': input.Stress_Level()}])
-        user_hs = model.predict(out_of_sample_data)
-        user_score.set(user_hs[0])
-        ax.axvline(user_hs[0], color= 'red')
+        score_value = model.predict(out_of_sample_data)[0]  
+        user_score.set(score_value)                        
+        user_category.set(categorize_score(score_value))
+      
+        
+        ax.axvline(score_value, color= 'red')
         return ax  
     
     @output
@@ -111,6 +126,26 @@ def server(input, output, session):
             f"Smoking: {input.Smoking()}\n\n"
             f"{score_text}"
         )
+    
+    @output
+    @render.text
+    def category():
+        cat = user_category.get()
+        if cat is None:
+            return "Category not calculated yet."
+        return f"Health Category: {cat}"
+    
+    @output
+    @render.text
+    def category():
+        cat = user_category.get()
+        if cat is None:
+          return "Category not calculated yet."
+
+        emoji = category_emoji(cat)
+        return f"Health Category: {cat} {emoji}"
+
+
  
 
 #App
