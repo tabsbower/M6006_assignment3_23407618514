@@ -3,11 +3,14 @@ import seaborn as sns
 import pandas as pd
 import statsmodels.formula.api as smf
 from shiny import reactive 
+import statsmodels.api as sm  
 
 df = pd.read_csv('holistic_health_lifestyle_dataset.csv')
+df["Health_Score"] = df["Overall_Health_Score"] / 100
 
-f = 'Overall_Health_Score ~ Sleep_Hours + Alcohol + Stress_Level + Mindfulness + Hydration + Physical_Activity + Smoking '
-model = smf.ols(formula=f, data=df).fit()
+f = 'Health_Score ~ Sleep_Hours + Alcohol + Stress_Level + Mindfulness + Hydration + Physical_Activity + Smoking'
+
+model = smf.glm( formula=f, data=df, family=sm.families.Binomial()).fit()
 
 band_ranges = (
     df.groupby("Health_Status")["Overall_Health_Score"].agg(["min", "max"])
@@ -98,7 +101,9 @@ def server(input, output, session):
         'Physical_Activity' : input.Physical_Activity(),
         'Smoking': input.Smoking(),
         'Stress_Level': input.Stress_Level()}])
-        score_value = model.predict(out_of_sample_data)[0]  
+        score = model.predict(out_of_sample_data)[0]
+        score_value = score * 100
+
         user_score.set(score_value)                        
         user_category.set(categorize_score(score_value))
       
